@@ -4,24 +4,26 @@
 
 ## 🎯 Objectif
 
-Créer un dispositif **compact, autonome et discret** à insérer dans une semelle de chaussure pour **surveiller l’activité de marche** d’un utilisateur, incluant :
+Créer un dispositif **compact, autonome et discret** à insérer dans une semelle de chaussure pour **surveiller l’activité de marche** d’un utilisateur :
 
 - Activité de jour (~4 h de marche)
-- Détection de mouvements nocturnes (lever, toilette)
-- Transfert sans fil des données (BLE)
-- Autonomie minimale de 14 jours
+- Détection de mouvements nocturnes (ex. levers pour aller aux toilettes)
+- Transfert des données par BLE via smartphone
+- Autonomie d’au moins 14 jours
+- Enregistrement minimaliste et basse consommation
 
 ---
 
 ## 🧠 Fonctionnement général
 
-Le système s'appuie sur le **capteur IMU LSM6DS3TR-C** du **Seeed XIAO BLE Sense**, qui intègre un **compteur de pas matériel** permettant un fonctionnement ultra-basse consommation.
-
-- ⏱️ **Une mesure du nombre total de pas est enregistrée toutes les 5 minutes**
-- 📅 L’utilisateur **envoie une commande de démarrage** via BLE (via l’app nRF Connect), qui injecte également l’heure de départ
-- 🗃️ Les pas sont stockés en mémoire flash interne (aucune carte SD nécessaire)
-- 📲 À la demande, une commande `DUMP` via BLE provoque le **transfert des données vers le smartphone**
-- 🔋 Le tout est optimisé pour fonctionner **plus de 14 jours sur une batterie LiPo de 800 mAh**
+- 🧩 Basé sur la carte **Seeed Studio XIAO BLE Sense** (nRF52840 + IMU LSM6DS3TR-C)
+- 🧠 Utilise le **compteur de pas matériel intégré** du capteur
+- ⏱️ Le microcontrôleur se réveille **toutes les 5 minutes en journée** et **toutes les 15 minutes la nuit**
+- 💾 Il enregistre la valeur du compteur **uniquement si elle a changé**
+- 📲 Interaction utilisateur via **Bluetooth activé uniquement au démarrage**
+- 🧠 Deux cas d’usage :
+  - `START timestamp` → remise à zéro du compteur + lancement du suivi
+  - `DUMP` → transmission des données enregistrées
 
 ---
 
@@ -29,129 +31,122 @@ Le système s'appuie sur le **capteur IMU LSM6DS3TR-C** du **Seeed XIAO BLE Sens
 
 | Composant                     | Description                                  |
 |------------------------------|----------------------------------------------|
-| Seeed Studio XIAO BLE Sense  | Microcontrôleur nRF52840 + IMU intégré       |
-| Batterie LiPo 3.7 V ≥ 800 mAh| Autonomie ≥ 14 jours                         |
-| Connexion BLE (nRF Connect)  | Pour la configuration et l’extraction        |
-| Micro-USB-C                  | Recharge de la batterie intégrée             |
+| Seeed Studio XIAO BLE Sense  | Microcontrôleur nRF52840 + IMU LSM6DS3       |
+| Batterie LiPo 3.7 V 120 mAh  | Autonomie ≥ 30 jours                         |
+| Connexion BLE (nRF Connect)  | Configuration & extraction                   |
+| Micro-USB-C                  | Recharge via chargeur BQ25100 intégré        |
 
 ---
 
 ## 📦 Flux de données
 
-### 1. Initialisation (via BLE)
-- L’utilisateur connecte son téléphone avec **nRF Connect**
-- Il envoie une commande `START yyyy-mm-ddThh:mm:ssZ`
-- Le firmware initialise le compteur de pas et enregistre le temps de référence
+### 1. Démarrage (via **reset**)
+- Active la publicité BLE pour 60 s
+- Attend une commande depuis nRF Connect :
 
-### 2. Fonctionnement autonome
-- Toutes les **5 minutes**, le firmware :
-  - Lit le compteur de pas interne (LSM6DS3)
-  - Enregistre la valeur si elle a changé
-  - Associe la valeur à un timestamp relatif
+#### Cas 1 – `START yyyy-mm-ddThh:mm:ssZ`
+- Réinitialise la mémoire et le compteur de pas
+- Enregistre le timestamp de référence
+- Coupe le BLE et démarre le suivi
 
-### 3. Dump des données
-- L’utilisateur envoie une commande `DUMP` via BLE
-- Le système envoie les données via BLE Notifications (20 octets/paquet)
-- Format : `[timestamp offset (2 octets)] + [compteur de pas (2 octets)]`
+#### Cas 2 – `DUMP`
+- Envoie les données via BLE Notify
+- Coupe le BLE et continue le comptage
 
 ---
 
-## 📱 Interaction via BLE
+## 🧾 Stockage
 
-| Caractéristique     | Type    | UUID (exemple)           | Description                           |
-|---------------------|---------|--------------------------|----------------------------------------|
-| Commande            | Write   | `1234...`                | `START`, `DUMP`, `CLEAR`, etc.         |
-| Données de pas      | Notify  | `5678...`                | Envoie les blocs horodatés             |
-| Niveau batterie     | Read    | `0x2A19` (standard)      | % de batterie via ADC interne          |
+| Format                  | Détail                                  |
+|-------------------------|-----------------------------------------|
+| Un enregistrement       | 2 octets timestamp delta + 2 octets pas |
+| Fréquence (jour)        | Toutes les 5 min si variation           |
+| Fréquence (nuit)        | Toutes les 15 min si variation          |
+| Enregistrement typique  | ~150–200 points / jour                  |
+| Taille estimée 14 jours | ~1.5 Ko à ~3 Ko                         |
+| Mémoire dispo (flash)   | ≥ 512 Ko                                |
+
+---
+
+## 🔋 Gestion de l'alimentation
+
+### 🔢 Consommation estimée
+
+| Source                    | Valeur typique |
+|---------------------------|----------------|
+| IMU actif (24h)           | ~2.88 mAh      |
+| MCU en veille             | ~0.05 mAh      |
+| Réveils (224/jour)        | ~0.003 mAh     |
+| BLE au boot uniquement    | ~0.08 mAh (ponctuel) |
+| **Total / jour**          | **~2.93 mAh** ✅
+
+### 🪫 Batterie recommandée : **LiPo 3.7 V – 120 mAh**
+
+> Exemple : [LiPo 120 mAh 401822 – Amazon](https://www.amazon.fr/401822-Liter-l%C3%A9lectronique-Rechargeable-t%C3%A9l%C3%A9phone/dp/B0892MS2D1)
+
+| Capacité utile (90%) | Autonomie estimée |
+|----------------------|--------------------|
+| ~108 mAh             | **~36 jours** ✅   |
+
+---
+
+## 📱 Interaction BLE
+
+| Caractéristique     | Type    | UUID (exemple)           | Description                      |
+|---------------------|---------|--------------------------|----------------------------------|
+| Commande            | Write   | `1234...`                | `START`, `DUMP`                  |
+| Données de pas      | Notify  | `5678...`                | Blocs horodatés (20 octets max) |
+| Niveau batterie     | Read    | `0x2A19` (standard)      | Tension estimée via ADC interne |
 
 Utilisez **nRF Connect (iOS/Android)** pour piloter la carte.
 
 ---
 
-## 🔋 Autonomie & batterie
+## 📐 Positionnement et fixation
 
-### 🔢 Consommation estimée
-
-| Composant / Mode             | Consommation | Temps / jour | Total / jour |
-|-----------------------------|--------------|--------------|--------------|
-| Acquisition + mémoire       | 10 mA        | 4 h          | 40 mAh       |
-| BLE publicité (1 Hz)        | 0.3 mA       | 10 h         | 3 mAh        |
-| Veille RTC                  | ~2 µA        | 10 h         | 0.02 mAh     |
-| **Total journalier**        |              |              | **~43 mAh**  |
-
-### 🔋 Batterie recommandée : **800 mAh**
-> Permet une autonomie de **≥ 16 jours** avec marge de sécurité.
+- Carte à fixer **solidement** dans la semelle (voûte plantaire, talon)
+- Orientation **non critique**
+- Le compteur matériel fonctionne dès qu’un **mouvement rythmique** est détecté
 
 ---
 
-## 🗃️ Stockage
+## 🛠️ Outils
 
-| Format d’enregistrement       | Valeur           |
-|-------------------------------|------------------|
-| Fréquence d’enregistrement    | 1 point / 5 min  |
-| Taille par point              | 4 octets         |
-| Points par jour               | 288              |
-| Taille par jour               | ~1.1 Ko          |
-| 14 jours                      | ~15 Ko           |
-| Capacité flash dispo          | ≥ 512 Ko (interne) |
-
----
-
-## 🧩 Position et fiabilité
-
-- Le compteur de pas **fonctionne quelle que soit l’orientation** de la carte
-- Il suffit que la carte soit **fermement fixée** dans la semelle pour éviter les fausses détections dues aux vibrations
-- Testée pour détecter même des mouvements **nocturnes faibles** (ex : lever la nuit)
-
----
-
-## 🔒 Sécurité & robustesse
-
-- Publicité BLE uniquement active **pendant les heures d’activité** (ex : 8h–18h, toutes les 5 min)
-- Pas de données perdues même sans connexion mobile
-- Possibilité d’injection de l'heure exacte par BLE à tout moment (resync)
-
----
-
-## 🛠️ Outils recommandés
-
-- 🔧 **IDE** : Arduino IDE + Seeed nRF52 Board package
-- 📲 **App mobile** : [nRF Connect](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-mobile) (iOS / Android)
-- 📊 **Export CSV/JSON** : depuis nRF Connect, intégration possible avec Excel ou Python/Plotly
-- 🖼️ **Modélisation 3D** (boîtier) : FreeCAD
+- 🔧 **IDE** : Arduino IDE + Seeed nRF52 Boards
+- 📲 **App mobile** : [nRF Connect](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-mobile)
+- 📊 **Export JSON** : depuis nRF Connect 
+- 🖼️ **Modélisation boîtier** : FreeCAD
 
 ---
 
 ## 🗺️ Roadmap
 
-- [x] Lecture du compteur de pas matériel
-- [x] Stockage horodaté toutes les 5 minutes
-- [x] Communication BLE via GATT
-- [ ] Création d’une WebApp ou interface front-end
-- [ ] Validation en conditions réelles
-- [ ] Publication open hardware
+- [x] Compteur de pas matériel actif 24h/24
+- [x] Enregistrement conditionnel toutes les 5 / 15 min
+- [x] Démarrage via RESET + commande BLE
+- [ ] Web interface (optionnelle)
+- [ ] Tests longue durée / validation semelle
+- [ ] Publication en open hardware
 
 ---
 
 ## Liens
 
 - 📲 **Composant principal** : [XIAO nRF52840 Sense](https://wiki.seeedstudio.com/XIAO_BLE/)
-- 📲 **Batterie** : [Batterie Lithium polymère 3,7v 800mAh](https://www.amazon.fr/EEMB-LP442957-Rechargeable-connecteur-Correspond/dp/B0B5LF57SL/)
+- 📲 **Batterie** : [Batterie Lithium polymère 3,7v 800mAh](https://www.amazon.fr/401822-Liter-l%C3%A9lectronique-Rechargeable-t%C3%A9l%C3%A9phone/dp/B0892MS2D1)
 
 ## Dimensions
 
-- XIAO nRF52840 Sense : W=21mm, H= , L=17.5mm
-- Batterie : W=28.5mm, H=4.8mm, L=29.5mm
+- XIAO nRF52840 Sense : W=21mm, H=? , L=17.5mm
+- Batterie : W=24mm, H=4mm, L=18mm
 
 ## 📄 Licence
 
 Projet sous licence **MIT**.  
-> Vous pouvez l’utiliser librement, le modifier, le redistribuer – avec attribution.
+> Libre d'utilisation, modification, redistribution – attribution requise.
 
 ---
 
 ## 📬 Contact
 
-Pour toute question ou suggestion : [votre.email@exemple.com]
-
-
+Pour toute question ou collaboration : 
