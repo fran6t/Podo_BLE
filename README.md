@@ -133,6 +133,16 @@ Utilisez **nRF Connect (iOS/Android)** pour piloter la carte.
 
 ---
 
+## Liens
+
+- 📲 **Composant principal** : [XIAO nRF52840 Sense](https://wiki.seeedstudio.com/XIAO_BLE/)
+- 📲 **Batterie** : [Batterie Lithium polymère 3,7v 800mAh](https://www.amazon.fr/EEMB-LP442957-Rechargeable-connecteur-Correspond/dp/B0B5LF57SL/)
+
+## Dimensions
+
+- XIAO nRF52840 Sense : W=21mm, H= , L=17.5mm
+- Batterie : W=28.5mm, H=4.8mm, L=29.5mm
+
 ## 📄 Licence
 
 Projet sous licence **MIT**.  
