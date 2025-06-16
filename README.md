@@ -68,6 +68,24 @@ Créer un dispositif **compact, autonome et discret** à insérer dans une semel
 
 ---
 
+### 🧠 Reconstruction des timestamps (export)
+
+Lors du `DUMP`, le firmware connaît l’heure exacte de départ (`START yyyy-mm-ddThh:mm:ssZ`).  
+Il peut donc **calculer pour chaque point** son horodatage réel :
+
+```text
+timestamp = heure_de_depart + offset_minutes
+
+Exemple de fichier CSV généré :
+
+Timestamp,Steps
+2025-06-14T08:00:00Z,0
+2025-06-14T08:05:00Z,12
+2025-06-14T08:15:00Z,23
+2025-06-14T08:30:00Z,42
+
+➡️ Ce format est compatible Google Sheets / Excel et permet une visualisation graphique simple de l'activité jour/nuit.
+
 ## 🔋 Gestion de l'alimentation
 
 ### 🔢 Consommation estimée
